@@ -1,0 +1,233 @@
+/**
+ * Content Script样式
+ * 翻译控制条和相关UI样式
+ */
+
+/* 命名空间前缀：ds-trans-* */
+
+/* 控制条容器 */
+.ds-trans-control-bar {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  width: 320px;
+  background: #ffffff;
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  z-index: 2147483647;
+  overflow: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB',
+    'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  transition: opacity 0.3s ease, transform 0.3s ease;
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.ds-trans-control-bar.ds-trans-hidden {
+  opacity: 0;
+  transform: translateY(-20px);
+  pointer-events: none;
+}
+
+/* 状态区域 */
+.ds-trans-status {
+  display: flex;
+  align-items: center;
+  padding: 16px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+}
+
+.ds-trans-icon {
+  font-size: 20px;
+  margin-right: 10px;
+  flex-shrink: 0;
+}
+
+.ds-trans-icon-spinning {
+  animation: ds-trans-spin 1s linear infinite;
+}
+
+@keyframes ds-trans-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.ds-trans-status-text {
+  flex: 1;
+  font-size: 14px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ds-trans-progress-text {
+  font-size: 12px;
+  opacity: 0.9;
+  margin-left: 8px;
+  flex-shrink: 0;
+}
+
+/* 操作按钮区域 */
+.ds-trans-actions {
+  display: flex;
+  padding: 12px;
+  gap: 8px;
+  background: #ffffff;
+  border-top: 1px solid #e5e7eb;
+}
+
+.ds-trans-btn {
+  flex: 1;
+  padding: 8px 12px;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: inherit;
+}
+
+.ds-trans-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.ds-trans-btn:active {
+  transform: translateY(0);
+}
+
+.ds-trans-btn-secondary {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.ds-trans-btn-secondary:hover {
+  background: #e5e7eb;
+}
+
+.ds-trans-btn-icon {
+  width: 36px;
+  flex: none;
+  padding: 8px;
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.ds-trans-btn-icon:hover {
+  background: #fecaca;
+}
+
+/* 进度条 */
+.ds-trans-progress-bar {
+  height: 3px;
+  background: #e5e7eb;
+  position: relative;
+  overflow: hidden;
+}
+
+.ds-trans-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+  transition: width 0.3s ease;
+}
+
+/* Toast消息 */
+.ds-trans-toast {
+  position: fixed;
+  bottom: 30px;
+  left: 50%;
+  transform: translateX(-50%) translateY(20px);
+  background: rgba(0, 0, 0, 0.8);
+  color: white;
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-size: 14px;
+  z-index: 2147483647;
+  opacity: 0;
+  transition: all 0.3s ease;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB',
+    'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  pointer-events: none;
+}
+
+.ds-trans-toast-visible {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+/* 响应式设计 - 移动端 */
+@media (max-width: 768px) {
+  .ds-trans-control-bar {
+    top: auto;
+    bottom: 0;
+    right: 0;
+    left: 0;
+    width: 100%;
+    border-radius: 12px 12px 0 0;
+    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.15);
+  }
+
+  .ds-trans-control-bar.ds-trans-hidden {
+    transform: translateY(100%);
+  }
+
+  .ds-trans-status {
+    padding: 12px 16px;
+  }
+
+  .ds-trans-actions {
+    padding: 10px 16px;
+  }
+
+  .ds-trans-btn {
+    padding: 10px 14px;
+    font-size: 14px;
+  }
+}
+
+/* 暗黑模式支持 */
+@media (prefers-color-scheme: dark) {
+  .ds-trans-control-bar {
+    background: #1f2937;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  }
+
+  .ds-trans-actions {
+    background: #1f2937;
+    border-top-color: #374151;
+  }
+
+  .ds-trans-btn-secondary {
+    background: #374151;
+    color: #e5e7eb;
+  }
+
+  .ds-trans-btn-secondary:hover {
+    background: #4b5563;
+  }
+
+  .ds-trans-progress-bar {
+    background: #374151;
+  }
+}
+
+/* 翻译文本标记 */
+[data-translated="true"] {
+  transition: opacity 0.15s ease;
+}
+
+/* 加载状态 */
+.ds-trans-loading {
+  opacity: 0.5;
+}
+
+/* 打印样式 */
+@media print {
+  .ds-trans-control-bar,
+  .ds-trans-toast {
+    display: none !important;
+  }
+}

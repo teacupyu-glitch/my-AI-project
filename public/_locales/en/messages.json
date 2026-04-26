@@ -1,0 +1,58 @@
+{
+  "extensionName": {
+    "message": "AI Translation Assistant",
+    "description": "Extension name"
+  },
+  "extensionDescription": {
+    "message": "Browser page translation plugin based on DeepSeek AI model",
+    "description": "Extension description"
+  },
+  "translate": {
+    "message": "Translate Page",
+    "description": "Translate button text"
+  },
+  "translating": {
+    "message": "Translating...",
+    "description": "Translating status"
+  },
+  "translated": {
+    "message": "Translated",
+    "description": "Translated status"
+  },
+  "settings": {
+    "message": "Settings",
+    "description": "Settings button text"
+  },
+  "apiKey": {
+    "message": "API Key",
+    "description": "API key label"
+  },
+  "targetLanguage": {
+    "message": "Target Language",
+    "description": "Target language label"
+  },
+  "save": {
+    "message": "Save",
+    "description": "Save button"
+  },
+  "cancel": {
+    "message": "Cancel",
+    "description": "Cancel button"
+  },
+  "undo": {
+    "message": "Undo",
+    "description": "Undo button"
+  },
+  "showOriginal": {
+    "message": "Show Original",
+    "description": "Show original button"
+  },
+  "showTranslation": {
+    "message": "Show Translation",
+    "description": "Show translation button"
+  },
+  "close": {
+    "message": "Close",
+    "description": "Close button"
+  }
+}

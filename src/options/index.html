@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>设置 - AI翻译助手</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="options-container">
+    <!-- 头部 -->
+    <header class="options-header">
+      <h1>⚙️ 设置</h1>
+      <p class="subtitle">配置你的翻译插件</p>
+    </header>
+
+    <!-- API配置 -->
+    <section class="settings-section">
+      <h2 class="section-title">API配置</h2>
+
+      <div class="form-group">
+        <label for="apiKey" class="form-label">DeepSeek API密钥 <span class="required">*</span></label>
+        <input
+          type="password"
+          id="apiKey"
+          class="form-input"
+          placeholder="sk-xxxxxxxxxxxxxxxxxxxxxxxx"
+        >
+        <div class="form-hint">
+          在 <a href="https://platform.deepseek.com/api_keys" target="_blank">DeepSeek平台</a> 获取API密钥
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label for="modelSelect" class="form-label">模型</label>
+        <select id="modelSelect" class="form-select">
+          <option value="deepseek-chat">DeepSeek Chat（推荐）</option>
+          <option value="deepseek-coder">DeepSeek Coder</option>
+        </select>
+      </div>
+
+      <div class="form-actions">
+        <button id="validateBtn" class="btn btn-secondary">验证密钥</button>
+        <button id="saveApiBtn" class="btn btn-primary">保存API配置</button>
+      </div>
+
+      <div id="apiMessage" class="message-box"></div>
+    </section>
+
+    <!-- 翻译设置 -->
+    <section class="settings-section">
+      <h2 class="section-title">翻译设置</h2>
+
+      <div class="form-group">
+        <label for="targetLang" class="form-label">默认目标语言</label>
+        <select id="targetLang" class="form-select">
+          <option value="zh-CN">中文（简体）</option>
+          <option value="zh-TW">中文（繁体）</option>
+          <option value="en">英文</option>
+          <option value="ja">日文</option>
+          <option value="ko">韩文</option>
+          <option value="fr">法文</option>
+          <option value="de">德文</option>
+          <option value="es">西班牙文</option>
+          <option value="ru">俄文</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label for="autoDetect" class="form-label">
+          <input type="checkbox" id="autoDetect" class="form-checkbox">
+          自动检测源语言
+        </label>
+      </div>
+
+      <div class="form-actions">
+        <button id="saveTranslationBtn" class="btn btn-primary">保存翻译设置</button>
+      </div>
+    </section>
+
+    <!-- 高级设置 -->
+    <section class="settings-section">
+      <h2 class="section-title">高级设置</h2>
+
+      <div class="form-group">
+        <label for="maxChunkSize" class="form-label">
+          最大分块大小（字符）
+        </label>
+        <input
+          type="number"
+          id="maxChunkSize"
+          class="form-input"
+          min="500"
+          max="5000"
+          step="100"
+          value="2000"
+        >
+        <div class="form-hint">
+          单次翻译的最大字符数，建议1000-3000
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label for="concurrency" class="form-label">
+          并发请求数
+        </label>
+        <input
+          type="number"
+          id="concurrency"
+          class="form-input"
+          min="1"
+          max="10"
+          step="1"
+          value="3"
+        >
+        <div class="form-hint">
+          同时进行的翻译请求数，建议2-5
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label for="temperature" class="form-label">
+          温度参数
+        </label>
+        <input
+          type="number"
+          id="temperature"
+          class="form-input"
+          min="0"
+          max="1"
+          step="0.1"
+          value="0.3"
+        >
+        <div class="form-hint">
+          控制翻译的创造性，0.0-1.0，翻译建议0.2-0.4
+        </div>
+      </div>
+
+      <div class="form-actions">
+        <button id="saveAdvancedBtn" class="btn btn-primary">保存高级设置</button>
+      </div>
+    </section>
+
+    <!-- 排除网站 -->
+    <section class="settings-section">
+      <h2 class="section-title">排除网站</h2>
+
+      <div class="form-group">
+        <label for="excludedSites" class="form-label">
+          排除的网站（每行一个域名）
+        </label>
+        <textarea
+          id="excludedSites"
+          class="form-textarea"
+          rows="5"
+          placeholder="github.com&#10;stackoverflow.com&#10;localhost"
+        ></textarea>
+        <div class="form-hint">
+          这些网站将不会显示翻译功能
+        </div>
+      </div>
+
+      <div class="form-actions">
+        <button id="saveExcludedBtn" class="btn btn-primary">保存排除列表</button>
+      </div>
+    </section>
+
+    <!-- 重置 -->
+    <section class="settings-section">
+      <h2 class="section-title">重置</h2>
+
+      <div class="form-group">
+        <button id="resetBtn" class="btn btn-danger">重置所有设置</button>
+      </div>
+    </section>
+  </div>
+
+  <script type="module" src="../options.js"></script>
+</body>
+</html>

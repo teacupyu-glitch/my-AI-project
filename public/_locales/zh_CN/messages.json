@@ -1,0 +1,58 @@
+{
+  "extensionName": {
+    "message": "AI翻译助手",
+    "description": "扩展名称"
+  },
+  "extensionDescription": {
+    "message": "基于DeepSeek大模型的浏览器整页翻译插件",
+    "description": "扩展描述"
+  },
+  "translate": {
+    "message": "翻译页面",
+    "description": "翻译按钮文本"
+  },
+  "translating": {
+    "message": "翻译中...",
+    "description": "翻译中状态"
+  },
+  "translated": {
+    "message": "已翻译",
+    "description": "已翻译状态"
+  },
+  "settings": {
+    "message": "设置",
+    "description": "设置按钮文本"
+  },
+  "apiKey": {
+    "message": "API密钥",
+    "description": "API密钥标签"
+  },
+  "targetLanguage": {
+    "message": "目标语言",
+    "description": "目标语言标签"
+  },
+  "save": {
+    "message": "保存",
+    "description": "保存按钮"
+  },
+  "cancel": {
+    "message": "取消",
+    "description": "取消按钮"
+  },
+  "undo": {
+    "message": "撤销",
+    "description": "撤销按钮"
+  },
+  "showOriginal": {
+    "message": "显示原文",
+    "description": "显示原文按钮"
+  },
+  "showTranslation": {
+    "message": "显示译文",
+    "description": "显示译文按钮"
+  },
+  "close": {
+    "message": "关闭",
+    "description": "关闭按钮"
+  }
+}

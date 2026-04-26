@@ -1,0 +1,25 @@
+{
+  "name": "ai-trans-extension",
+  "version": "1.0.0",
+  "description": "基于大模型API的浏览器翻译插件",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build && vite build --config vite.content.config.js",
+    "preview": "vite preview"
+  },
+  "keywords": [
+    "translation",
+    "browser-extension",
+    "deepseek",
+    "ai"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "@vitejs/plugin-legacy": "^5.4.1",
+    "terser": "^5.31.0",
+    "vite": "^5.2.11",
+    "vite-plugin-static-copy": "^1.0.6"
+  }
+}
