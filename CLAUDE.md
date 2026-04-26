@@ -59,10 +59,23 @@ Stored in `chrome.storage.local` under key `config`:
 - Client: `src/lib/deepseek-client.js`
 - The system prompt instructs the model to translate independently (no separators needed since each call handles one text segment)
 
+## Background Service Worker
+
+`src/background/index.js` is minimal — it does NOT proxy translation requests. It handles:
+- Setting default config on install
+- `getConfig` / `saveConfig` / `validateAPIKey` via `runtime.onMessage`
+- Broadcasting config changes to content scripts via `storage.onChanged`
+
+All translation happens directly in the content script.
+
+## Dead Code
+
+- `src/lib/storage.js` — unused; `BrowserCompat.getStorage()` in utils.js is used instead
+- `src/content/text-processor.js` — unused after per-node translation refactor; kept for reference
+
 ## Key Constraints
 
 - All content script CSS uses `ds-trans-*` class prefix
 - Control bar `z-index: 2147483647`
 - Text node operations: use `textContent` only (no `dataset`, no `style`)
 - API keys in `chrome.storage.local`, never hardcoded
-- `BrowserCompat` in `src/lib/utils.js` handles Chrome/Firefox API differences
