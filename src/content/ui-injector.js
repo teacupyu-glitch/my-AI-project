@@ -8,6 +8,8 @@ class UIInjector {
     this.originalNodes = new Map();
     this.isInjected = false;
     this.animationDuration = 300;
+    this.isEditing = false;
+    this.editSpans = new Map();
   }
 
   /**
@@ -34,6 +36,7 @@ class UIInjector {
         <div class="ds-trans-actions">
           <button id="ds-trans-btn-undo" class="ds-trans-btn ds-trans-btn-secondary">撤销</button>
           <button id="ds-trans-btn-toggle" class="ds-trans-btn ds-trans-btn-secondary">显示原文</button>
+          <button id="ds-trans-btn-edit" class="ds-trans-btn ds-trans-btn-secondary">编辑</button>
           <button id="ds-trans-btn-close" class="ds-trans-btn ds-trans-btn-icon">✕</button>
         </div>
         <div class="ds-trans-progress-bar">
@@ -154,6 +157,18 @@ class UIInjector {
       });
     }
 
+    // 编辑按钮
+    const editBtn = document.getElementById('ds-trans-btn-edit');
+    if (editBtn) {
+      editBtn.addEventListener('click', () => {
+        if (this.isEditing) {
+          this.onEditFinish && this.onEditFinish();
+        } else {
+          this.onEditStart && this.onEditStart();
+        }
+      });
+    }
+
     // 关闭按钮
     const closeBtn = document.getElementById('ds-trans-btn-close');
     if (closeBtn) {
@@ -200,6 +215,8 @@ class UIInjector {
    * 撤销翻译
    */
   undoTranslations() {
+    if (this.isEditing) this.exitEditMode(false);
+
     this.originalNodes.forEach((value, node) => {
       node.textContent = value.originalText;
     });
@@ -214,6 +231,8 @@ class UIInjector {
    * 切换显示原文/译文
    */
   toggleTranslations(showTranslation) {
+    if (this.isEditing) this.exitEditMode(false);
+
     this.originalNodes.forEach((value, node) => {
       node.textContent = showTranslation
         ? (value.translatedText || value.originalText)
@@ -240,6 +259,83 @@ class UIInjector {
    */
   setCloseCallback(callback) {
     this.onCloseClick = callback;
+  }
+
+  /**
+   * 设置编辑模式回调
+   */
+  setEditCallback(onStart, onFinish) {
+    this.onEditStart = onStart;
+    this.onEditFinish = onFinish;
+  }
+
+  /**
+   * 进入编辑模式 — 将已翻译的 TextNode 替换为 contenteditable span
+   */
+  enterEditMode() {
+    if (this.isEditing) return;
+
+    // 只在显示译文状态下进入编辑
+    this.editSpans.clear();
+
+    this.originalNodes.forEach((value, textNode) => {
+      if (!textNode.parentNode) return;
+      if (!value.translatedText) return;
+
+      const span = document.createElement('span');
+      span.className = 'ds-trans-editable';
+      span.contentEditable = 'true';
+      span.textContent = textNode.textContent;
+
+      textNode.replaceWith(span);
+      this.editSpans.set(span, {
+        textNode,
+        originalText: value.originalText,
+        translatedText: value.translatedText
+      });
+    });
+
+    this.isEditing = true;
+
+    const editBtn = document.getElementById('ds-trans-btn-edit');
+    if (editBtn) {
+      editBtn.textContent = '完成';
+      editBtn.classList.add('ds-trans-btn-editing');
+    }
+  }
+
+  /**
+   * 退出编辑模式 — span 替换回 TextNode
+   * @param {boolean} save - 是否保存编辑结果
+   */
+  exitEditMode(save = true) {
+    if (!this.isEditing) return;
+
+    this.editSpans.forEach((info, span) => {
+      if (!span.parentNode) return;
+
+      const editedText = save ? span.textContent : info.translatedText;
+      const newTextNode = document.createTextNode(editedText);
+
+      span.replaceWith(newTextNode);
+
+      // 更新 originalNodes Map（键切换为新 TextNode）
+      this.originalNodes.delete(info.textNode);
+      this.originalNodes.set(newTextNode, {
+        originalText: info.originalText,
+        translatedText: editedText,
+        id: info.textNode.id
+      });
+    });
+
+    this.editSpans.clear();
+    this.isEditing = false;
+
+    const editBtn = document.getElementById('ds-trans-btn-edit');
+    if (editBtn) {
+      editBtn.textContent = '编辑';
+      editBtn.classList.remove('ds-trans-btn-editing');
+    }
   }
 
   /**

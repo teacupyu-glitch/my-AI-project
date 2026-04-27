@@ -35,6 +35,10 @@ class ContentScript {
     this.uiInjector.setUndoCallback(() => this.undoTranslation());
     this.uiInjector.setToggleCallback((btn) => this.toggleTranslation(btn));
     this.uiInjector.setCloseCallback(() => this.hideUI());
+    this.uiInjector.setEditCallback(
+      () => this.startEditMode(),
+      () => this.finishEditMode()
+    );
 
     // 设置翻译器回调
     this.translator.setProgressCallback((current, total) => {
@@ -194,6 +198,7 @@ class ContentScript {
    * 撤销翻译
    */
   undoTranslation() {
+    this.uiInjector.exitEditMode(false);
     this.uiInjector.undoTranslations();
     this.showingTranslation = true;
   }
@@ -218,6 +223,20 @@ class ContentScript {
    */
   hideUI() {
     this.uiInjector.hideControlBar();
+  }
+
+  /**
+   * 进入编辑模式
+   */
+  startEditMode() {
+    this.uiInjector.enterEditMode();
+  }
+
+  /**
+   * 退出编辑模式
+   */
+  finishEditMode() {
+    this.uiInjector.exitEditMode(true);
   }
 
   /**

@@ -231,3 +231,40 @@
     display: none !important;
   }
 }
+
+/* 编辑模式 */
+.ds-trans-editable {
+  outline: none;
+  border-radius: 2px;
+  transition: background 0.15s;
+  cursor: text;
+}
+
+.ds-trans-editable:hover {
+  background: rgba(102, 126, 234, 0.08);
+}
+
+.ds-trans-editable:focus {
+  background: rgba(102, 126, 234, 0.12);
+  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.3);
+}
+
+.ds-trans-btn-editing {
+  background: #667eea !important;
+  color: white !important;
+}
+
+@media (prefers-color-scheme: dark) {
+  .ds-trans-editable:hover {
+    background: rgba(139, 156, 255, 0.15);
+  }
+
+  .ds-trans-editable:focus {
+    background: rgba(139, 156, 255, 0.2);
+  }
+
+  .ds-trans-btn-editing {
+    background: #5a67d8 !important;
+    color: white !important;
+  }
+}
