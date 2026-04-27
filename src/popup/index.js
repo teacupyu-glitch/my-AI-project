@@ -170,6 +170,30 @@ class Popup {
   }
 
   /**
+   * 发送翻译消息（cs未加载时自动注入）
+   */
+  async sendTranslationMessage(tab) {
+    try {
+      return await chrome.tabs.sendMessage(tab.id, { action: 'startTranslation' });
+    } catch (error) {
+      // content script 未加载：尝试动态注入后重试
+      if (error.message.includes('Receiving end does not exist') ||
+          error.message.includes('Could not establish connection')) {
+        try {
+          await chrome.scripting.executeScript({
+            target: { tabId: tab.id },
+            files: ['content.js']
+          });
+        } catch (injectError) {
+          throw new Error('无法注入翻译模块，请刷新页面后重试');
+        }
+        return await chrome.tabs.sendMessage(tab.id, { action: 'startTranslation' });
+      }
+      throw new Error('无法连接到当前页面，请刷新后重试');
+    }
+  }
+
+  /**
    * 处理翻译
    */
   async handleTranslate() {
@@ -197,10 +221,8 @@ class Popup {
       this.setTranslatingState(true);
       this.updateStatus('translating', '正在翻译...');
 
-      // 发送消息给content script
-      const response = await chrome.tabs.sendMessage(tab.id, {
-        action: 'startTranslation'
-      });
+      // 发送消息给content script（cs未加载时自动注入）
+      const response = await this.sendTranslationMessage(tab);
 
       if (!response.success) {
         throw new Error(response.error || '翻译失败');

@@ -155,8 +155,8 @@ class ContentScript {
       // 开始翻译
       const result = await this.translator.translate(this.textNodes);
 
-      if (result.success) {
-        // 应用翻译结果
+      // 应用翻译结果（即使部分失败也应用成功的节点）
+      if (result.stats.success > 0) {
         this.uiInjector.applyTranslations(this.textNodes);
       }
 

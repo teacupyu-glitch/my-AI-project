@@ -65,8 +65,15 @@ class DOMExtractor {
    * 判断节点是否应该被接受
    */
   shouldAcceptNode(node) {
-    // 跳过空白节点
-    if (!node.textContent.trim()) {
+    const text = node.textContent;
+
+    // 跳过纯空白节点
+    if (!text.trim()) {
+      return NodeFilter.FILTER_REJECT;
+    }
+
+    // 至少包含一个字母或数字（排除纯符号/标点/不可见字符的节点）
+    if (!/[\p{L}\p{N}]/u.test(text)) {
       return NodeFilter.FILTER_REJECT;
     }
 

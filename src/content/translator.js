@@ -126,7 +126,10 @@ class Translator {
           { maxTokens: Math.max(nodeInfo.text.length * 2, 500) }
         );
 
-        const cleaned = this.cleanResult(result.translatedText);
+        const cleaned = this.cleanResult(result.translatedText, nodeInfo.text);
+        if (!cleaned) {
+          throw new Error('翻译结果无效，模型未返回有效译文');
+        }
         nodeInfo.translated = true;
         nodeInfo.translatedText = cleaned;
 
@@ -154,8 +157,11 @@ class Translator {
 
   /**
    * 清理API返回的译文（剥离XML标签/markdown包裹）
+   * @param {string} text - API返回原文
+   * @param {string} originalText - 待翻译的原文，用于校验
+   * @returns {string} 清洗后的译文，无效时返回空字符串
    */
-  cleanResult(text) {
+  cleanResult(text, originalText = '') {
     let t = text.trim();
 
     // 移除 markdown 代码块包裹
@@ -165,14 +171,31 @@ class Translator {
     if (/<t\s+id=/.test(t)) {
       const parts = t.match(/<t\s+id="\d+">([\s\S]*?)<\/t>/g);
       if (parts) {
-        return parts.map(p => p.replace(/<t\s+id="\d+">/, '').replace(/<\/t>\s*$/, '').trim()).join('');
+        t = parts.map(p => p.replace(/<t\s+id="\d+">/, '').replace(/<\/t>\s*$/, '').trim()).join('');
       }
     }
 
     // 移除可能的 <translate> 包裹
     t = t.replace(/^<translate>\s*\n?/, '').replace(/\n?\s*<\/translate>\s*$/, '');
 
-    return t.trim();
+    t = t.trim();
+
+    // 剥离模型可能"反射"的提示词前缀
+    t = t.replace(/^请翻译以下文本[：:]\s*\n*/i, '').trim();
+
+    // 检测模型拒绝翻译的"元回复"（如"请提供原文"等）
+    if (/^请提供(您需要)?(的)?(需要)?翻译的?(原文)?文本[。.]?$/i.test(t) ||
+        /^请提供(您需要)?(的)?(需要)?翻译的?(原文)?内容[。.]?$/i.test(t) ||
+        /^请(输入|提供)(您需要)?(的)?(需要)?(翻译的?)?文本[。.]?$/i.test(t)) {
+      return '';
+    }
+
+    // 仅当结果为空时视为无效
+    if (!t) {
+      return '';
+    }
+
+    return t;
   }
 
   setProgressCallback(callback) { this.onProgress = callback; }

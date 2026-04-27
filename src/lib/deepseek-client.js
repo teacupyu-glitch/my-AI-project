@@ -183,26 +183,19 @@ class DeepSeekClient {
    * 获取系统提示词
    */
   getSystemPrompt(sourceLang, targetLang) {
-    return `你是一个专业的翻译助手。请将以下${this.getLanguageName(sourceLang)}文本翻译成${this.getLanguageName(targetLang)}。
-
-输入格式说明：文本使用 <translate><t id="0">...</t><t id="1">...</t></translate> 的XML结构组织。
-每个 <t> 标签内是一个独立的翻译单元，必须独立翻译。
+    return `你是一个专业的翻译助手。请将用户提供的${this.getLanguageName(sourceLang)}文本翻译成${this.getLanguageName(targetLang)}。
 
 翻译要求：
-1. 严格保留XML结构：输出必须是 <translate><t id="0">译文</t><t id="1">译文</t></translate> 格式
-2. 不要修改任何XML标签（<translate>, <t id="N">, </t>, </translate>）
-3. 每个 <t> 标签之间是独立的，不要将相邻 <t> 的内容合并
-4. 对于代码、URL、邮箱等内容，保持原文不翻译
-5. 只返回翻译结果XML，不要添加任何解释或额外文本`;
+1. 只返回翻译结果，不要添加任何解释、说明或额外文本
+2. 保留原文的换行和格式
+3. 对于代码、URL、邮箱等内容，保持原文不翻译`;
   }
 
   /**
    * 获取用户提示词
    */
   getUserPrompt(text, sourceLang, targetLang) {
-    return `请翻译以下文本：
-
-${text}`;
+    return text;
   }
 
   /**
