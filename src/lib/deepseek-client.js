@@ -5,7 +5,7 @@
 class DeepSeekClient {
   constructor(config = {}) {
     this.apiKey = config.apiKey || '';
-    this.model = config.model || 'deepseek-chat';
+    this.model = config.model || 'deepseek-v4-flash';
     this.endpoint = config.endpoint || 'https://api.deepseek.com/chat/completions';
     this.timeout = config.timeout || 30000; // 30秒超时
     this.maxRetries = config.maxRetries || 3;
@@ -242,8 +242,8 @@ class DeepSeekClient {
    */
   getSupportedModels() {
     return [
-      { id: 'deepseek-chat', name: 'DeepSeek Chat', description: '通用对话模型' },
-      { id: 'deepseek-coder', name: 'DeepSeek Coder', description: '代码生成模型' }
+      { id: 'deepseek-v4-flash', name: 'DeepSeek V4 Flash', description: '高性价比轻量模型' },
+      { id: 'deepseek-v4-pro', name: 'DeepSeek V4 Pro', description: '旗舰高性能模型' }
     ];
   }
 

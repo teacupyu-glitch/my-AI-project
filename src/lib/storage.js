@@ -8,7 +8,7 @@ class StorageManager {
       apiConfig: {
         provider: 'deepseek',
         apiKey: '',
-        model: 'deepseek-chat',
+        model: 'deepseek-v4-flash',
         endpoint: 'https://api.deepseek.com/chat/completions'
       },
       translationSettings: {
@@ -83,7 +83,7 @@ class StorageManager {
   /**
    * 保存API密钥
    */
-  async saveAPIKey(apiKey, model = 'deepseek-chat') {
+  async saveAPIKey(apiKey, model = 'deepseek-v4-flash') {
     const config = await this.getConfig();
     config.apiConfig.apiKey = apiKey;
     config.apiConfig.model = model;
@@ -123,7 +123,7 @@ class StorageManager {
           'Authorization': `Bearer ${apiKey}`
         },
         body: JSON.stringify({
-          model: 'deepseek-chat',
+          model: 'deepseek-v4-flash',
           messages: [
             {
               role: 'user',

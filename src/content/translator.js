@@ -25,7 +25,7 @@ class Translator {
     this.onComplete = null;
   }
 
-  initAPI(apiKey, model = 'deepseek-chat') {
+  initAPI(apiKey, model = 'deepseek-v4-flash') {
     this.apiClient = new DeepSeekClient({ apiKey, model });
   }
 

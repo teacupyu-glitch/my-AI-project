@@ -25,7 +25,7 @@ async function setDefaultConfig() {
     apiConfig: {
       provider: 'deepseek',
       apiKey: '',
-      model: 'deepseek-chat',
+      model: 'deepseek-v4-flash',
       endpoint: 'https://api.deepseek.com/chat/completions'
     },
     translationSettings: {
@@ -133,7 +133,7 @@ async function validateAPIKey(apiKey) {
         'Authorization': `Bearer ${apiKey}`
       },
       body: JSON.stringify({
-        model: 'deepseek-chat',
+        model: 'deepseek-v4-flash',
         messages: [
           {
             role: 'user',
