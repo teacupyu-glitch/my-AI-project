@@ -207,12 +207,9 @@ class ContentScript {
    * 切换显示原文/译文
    */
   toggleTranslation(btn) {
+    this.showingTranslation = !this.showingTranslation;
     if (btn) {
-      const isShowingOriginal = btn.textContent === '显示翻译';
-      this.showingTranslation = !isShowingOriginal;
-      btn.textContent = isShowingOriginal ? '显示原文' : '显示翻译';
-    } else {
-      this.showingTranslation = !this.showingTranslation;
+      btn.textContent = this.showingTranslation ? '显示原文' : '显示翻译';
     }
 
     this.uiInjector.toggleTranslations(this.showingTranslation);
