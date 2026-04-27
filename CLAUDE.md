@@ -37,7 +37,7 @@ The content script (`src/content/index.js`) orchestrates these modules:
 
 2. **Translator** — Each text node is translated **individually** (one API call per node). Concurrency is controlled (default 3). There is NO batching, chunking, separators, or merge logic — each node maps 1:1 to one API call. The result is set directly on `nodeInfo.translated = true` / `nodeInfo.translatedText`.
 
-3. **UIInjector** — Injects a floating control bar. Manages `originalNodes` Map (keyed by Text node reference). Before translation, `saveOriginalNodes()` stores `{ originalText, translatedText: null }`. After translation, `applyTranslations()` sets `node.textContent` AND syncs `translatedText` back into the Map (needed for undo/toggle).
+3. **UIInjector** — Injects a floating control bar with undo/toggle/edit/close buttons. Manages `originalNodes` Map (keyed by Text node reference) and `editSpans` Map for inline edit mode. Before translation, `saveOriginalNodes()` stores `{ originalText, translatedText: null }`. After translation, `applyTranslations()` sets `node.textContent` AND syncs `translatedText` back into the Map. Edit mode wraps TextNodes in contenteditable spans and unwraps on exit.
 
 **Critical**: DOM `Text` nodes do NOT have `dataset` or `style` properties. Only `HTMLElement` does. Never set `node.dataset` or `node.style` on a Text node — use `node.textContent` only.
 
@@ -48,7 +48,8 @@ Stored in `chrome.storage.local` under key `config`:
 {
   apiConfig: { apiKey, model, endpoint },
   translationSettings: { sourceLang, targetLang, maxChunkSize, concurrency, temperature },
-  excludedSites: []
+  excludedSites: [],
+  glossary: [{ source: "原文", target: "译文" }]
 }
 ```
 
@@ -57,7 +58,43 @@ Stored in `chrome.storage.local` under key `config`:
 - Endpoint: `https://api.deepseek.com/chat/completions`
 - Auth: `Bearer {apiKey}` header
 - Client: `src/lib/deepseek-client.js`
-- The system prompt instructs the model to translate independently (no separators needed since each call handles one text segment)
+- Default model: `deepseek-v4-flash` (also supports `deepseek-v4-pro`). Old `deepseek-chat`/`deepseek-coder` removed July 2026.
+- `getSystemPrompt(sourceLang, targetLang, glossary)` — when glossary is non-empty, appends a numbered rules section with term mapping: `"source" → "target"`
+
+### Glossary (专有名词翻译)
+
+- `config.glossary` is an array of `{ source, target }` objects, managed in the options page
+- On translation start, `content/index.js` reads `config.glossary` and calls `translator.setGlossary()`
+- `translateOne()` passes `{ glossary }` to `apiClient.translate()`, which injects it into the system prompt
+- Empty glossary = no prompt change, no behavioral difference
+
+### Inline Edit Mode (译文内联编辑)
+
+- Control bar has an "编辑" button that toggles edit mode
+- `UIInjector.enterEditMode()` — wraps each translated TextNode in `<span class="ds-trans-editable" contenteditable="true">`, stores mapping in `this.editSpans` (span → original TextNode)
+- `UIInjector.exitEditMode(save)` — replaces spans back to TextNodes, updates `originalNodes` Map with edited text
+- Undo/toggle auto-exit edit mode (`exitEditMode(false)`) to prevent DOM state conflicts
+- Editable spans use `ds-trans-*` CSS class prefix with hover/focus blue highlight
+
+### Translation Result Validation
+
+`translator.js` `cleanResult(text, originalText)` cleans API responses in this order:
+1. Strip markdown code blocks
+2. Extract `<t id="N">` content if XML-wrapped
+3. Strip `<translate>` wrappers
+4. Strip residual prompt text (`/^请翻译以下文本[：:]/i`)
+5. Detect model "refusal" meta-responses (e.g., "请提供您需要翻译的原文文本") → return `""`
+6. Empty result → treated as failure, triggers retry in `translateOne()`
+
+### Popup — Content Script Recovery
+
+`popup/index.js` `sendTranslationMessage(tab)` — when `tabs.sendMessage` fails with "Receiving end does not exist", automatically injects `content.js` via `chrome.scripting.executeScript()` then retries once.
+
+### DOM Extraction Filters
+
+`DOMExtractor.shouldAcceptNode()` applies two-stage filtering:
+1. `text.trim()` — reject pure whitespace nodes
+2. `/[\p{L}\p{N}]/u` — reject nodes with no letter/number (pure symbols, zero-width characters)
 
 ## Background Service Worker
 
@@ -79,3 +116,6 @@ All translation happens directly in the content script.
 - Control bar `z-index: 2147483647`
 - Text node operations: use `textContent` only (no `dataset`, no `style`)
 - API keys in `chrome.storage.local`, never hardcoded
+- `startTranslation()` applies translations even on partial failure (`result.stats.success > 0`, not `result.success`)
+- `toggleTranslation()` toggles `this.showingTranslation` directly — never derive state from button text
+- Undo/toggle/close callbacks are registered via `UIInjector.set*Callback()` methods, not hardcoded
