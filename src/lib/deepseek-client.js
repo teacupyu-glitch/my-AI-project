@@ -99,7 +99,7 @@ class DeepSeekClient {
    * 翻译文本
    */
   async translate(text, sourceLang, targetLang, options = {}) {
-    const systemPrompt = options.systemPrompt || this.getSystemPrompt(sourceLang, targetLang);
+    const systemPrompt = options.systemPrompt || this.getSystemPrompt(sourceLang, targetLang, options.glossary);
     const userPrompt = options.userPrompt || this.getUserPrompt(text, sourceLang, targetLang);
 
     const response = await this.callAPI({
@@ -182,13 +182,22 @@ class DeepSeekClient {
   /**
    * 获取系统提示词
    */
-  getSystemPrompt(sourceLang, targetLang) {
-    return `你是一个专业的翻译助手。请将用户提供的${this.getLanguageName(sourceLang)}文本翻译成${this.getLanguageName(targetLang)}。
+  getSystemPrompt(sourceLang, targetLang, glossary = []) {
+    let prompt = `你是一个专业的翻译助手。请将用户提供的${this.getLanguageName(sourceLang)}文本翻译成${this.getLanguageName(targetLang)}。
 
 翻译要求：
 1. 只返回翻译结果，不要添加任何解释、说明或额外文本
 2. 保留原文的换行和格式
 3. 对于代码、URL、邮箱等内容，保持原文不翻译`;
+
+    if (glossary && glossary.length > 0) {
+      const rules = glossary
+        .map(item => `  "${item.source}" → "${item.target}"`)
+        .join('\n');
+      prompt += `\n4. 以下是专有名词翻译对照表，翻译时必须严格遵守，将原文中出现的词汇替换为指定译文：\n${rules}`;
+    }
+
+    return prompt;
   }
 
   /**

@@ -151,6 +151,7 @@ class ContentScript {
 
       this.translator.initAPI(apiConfig.apiKey, apiConfig.model);
       this.translator.updateConfig(config.translationSettings);
+      this.translator.setGlossary(config.glossary || []);
 
       // 开始翻译
       const result = await this.translator.translate(this.textNodes);

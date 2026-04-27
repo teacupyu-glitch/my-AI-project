@@ -18,6 +18,7 @@ class Translator {
 
     this.sourceLang = config.sourceLang || 'auto';
     this.targetLang = config.targetLang || 'zh-CN';
+    this.glossary = [];
 
     this.onProgress = null;
     this.onError = null;
@@ -32,6 +33,10 @@ class Translator {
     if (config.concurrency) this.concurrency = config.concurrency;
     if (config.sourceLang) this.sourceLang = config.sourceLang;
     if (config.targetLang) this.targetLang = config.targetLang;
+  }
+
+  setGlossary(glossary) {
+    this.glossary = glossary || [];
   }
 
   /**
@@ -123,7 +128,7 @@ class Translator {
           nodeInfo.text,
           this.sourceLang,
           this.targetLang,
-          { maxTokens: Math.max(nodeInfo.text.length * 2, 500) }
+          { maxTokens: Math.max(nodeInfo.text.length * 2, 500), glossary: this.glossary }
         );
 
         const cleaned = this.cleanResult(result.translatedText, nodeInfo.text);

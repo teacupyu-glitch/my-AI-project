@@ -45,7 +45,8 @@ async function setDefaultConfig() {
       'github.com',
       'stackoverflow.com',
       'localhost'
-    ]
+    ],
+    glossary: []
   };
 
   try {

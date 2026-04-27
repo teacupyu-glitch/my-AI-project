@@ -27,6 +27,11 @@ class Options {
     this.excludedSitesTextarea = document.getElementById('excludedSites');
     this.saveExcludedBtn = document.getElementById('saveExcludedBtn');
 
+    // 专有名词对照表
+    this.glossaryList = document.getElementById('glossaryList');
+    this.addGlossaryBtn = document.getElementById('addGlossaryBtn');
+    this.saveGlossaryBtn = document.getElementById('saveGlossaryBtn');
+
     // 重置
     this.resetBtn = document.getElementById('resetBtn');
 
@@ -60,6 +65,10 @@ class Options {
 
     // 排除网站
     this.saveExcludedBtn.addEventListener('click', () => this.saveExcludedSites());
+
+    // 专有名词对照表
+    this.addGlossaryBtn.addEventListener('click', () => this.addGlossaryRow('', ''));
+    this.saveGlossaryBtn.addEventListener('click', () => this.saveGlossary());
 
     // 重置
     this.resetBtn.addEventListener('click', () => this.resetAll());
@@ -109,6 +118,9 @@ class Options {
       if (config.excludedSites && Array.isArray(config.excludedSites)) {
         this.excludedSitesTextarea.value = config.excludedSites.join('\n');
       }
+
+      // 专有名词对照表
+      this.loadGlossary(config.glossary);
 
     } catch (error) {
       console.error('加载配置失败:', error);
@@ -341,6 +353,87 @@ class Options {
     } else {
       button.classList.remove('btn-loading');
       button.disabled = false;
+    }
+  }
+
+  /**
+   * 加载对照表
+   */
+  loadGlossary(glossary) {
+    this.glossaryList.innerHTML = '';
+    if (glossary && glossary.length > 0) {
+      glossary.forEach(item => this.addGlossaryRow(item.source, item.target));
+    } else {
+      this.addGlossaryRow('', '');
+    }
+  }
+
+  /**
+   * 添加对照表行
+   */
+  addGlossaryRow(source, target) {
+    const row = document.createElement('div');
+    row.className = 'glossary-row';
+
+    const sourceInput = document.createElement('input');
+    sourceInput.type = 'text';
+    sourceInput.placeholder = '原文';
+    sourceInput.value = source;
+
+    const targetInput = document.createElement('input');
+    targetInput.type = 'text';
+    targetInput.placeholder = '译文（留空表示保持原文）';
+    targetInput.value = target;
+
+    const removeBtn = document.createElement('button');
+    removeBtn.className = 'btn-remove';
+    removeBtn.textContent = '删除';
+    removeBtn.addEventListener('click', () => {
+      row.remove();
+      // 确保始终至少有一行
+      if (this.glossaryList.children.length === 0) {
+        this.addGlossaryRow('', '');
+      }
+    });
+
+    row.appendChild(sourceInput);
+    row.appendChild(targetInput);
+    row.appendChild(removeBtn);
+    this.glossaryList.appendChild(row);
+  }
+
+  /**
+   * 收集对照表数据
+   */
+  collectGlossary() {
+    const rows = this.glossaryList.querySelectorAll('.glossary-row');
+    const glossary = [];
+    rows.forEach(row => {
+      const inputs = row.querySelectorAll('input');
+      const source = inputs[0].value.trim();
+      const target = inputs[1].value.trim();
+      if (source) {
+        glossary.push({ source, target: target || source });
+      }
+    });
+    return glossary;
+  }
+
+  /**
+   * 保存对照表
+   */
+  async saveGlossary() {
+    try {
+      const glossary = this.collectGlossary();
+      const config = await this.getConfig();
+      config.glossary = glossary;
+
+      await this.saveConfig(config);
+      this.showMessage('对照表已保存', 'success');
+
+    } catch (error) {
+      console.error('保存对照表失败:', error);
+      this.showMessage(`保存失败: ${error.message}`, 'error');
     }
   }
 }
