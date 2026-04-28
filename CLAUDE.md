@@ -35,7 +35,7 @@ The content script (`src/content/index.js`) orchestrates these modules:
 
 1. **DOMExtractor** — `TreeWalker` to extract `Text` nodes from the DOM. Returns an array of `{ node, text, originalText, translated, translatedText, id, path, ... }` objects.
 
-2. **Translator** — Each text node is translated **individually** (one API call per node). Concurrency is controlled (default 3). There is NO batching, chunking, separators, or merge logic — each node maps 1:1 to one API call. The result is set directly on `nodeInfo.translated = true` / `nodeInfo.translatedText`.
+2. **Translator** — Uses **batch processing**: `TextProcessor.segmentTextNodes()` groups nodes into XML batches (`<translate><t id="N">text</t></translate>`), each batch is one API call via `translateBatchXML()`. Concurrency is controlled at the batch level (default 3). After each batch, `mergeTranslations()` parses the XML response and sets `nodeInfo.translated = true` / `nodeInfo.translatedText`.
 
 3. **UIInjector** — Injects a floating control bar with undo/toggle/edit/close buttons. Manages `originalNodes` Map (keyed by Text node reference) and `editSpans` Map for inline edit mode. Before translation, `saveOriginalNodes()` stores `{ originalText, translatedText: null }`. After translation, `applyTranslations()` sets `node.textContent` AND syncs `translatedText` back into the Map. Edit mode wraps TextNodes in contenteditable spans and unwraps on exit.
 
@@ -65,7 +65,7 @@ Stored in `chrome.storage.local` under key `config`:
 
 - `config.glossary` is an array of `{ source, target }` objects, managed in the options page
 - On translation start, `content/index.js` reads `config.glossary` and calls `translator.setGlossary()`
-- `translateOne()` passes `{ glossary }` to `apiClient.translate()`, which injects it into the system prompt
+- `translateBatch()` passes `{ glossary }` to `apiClient.translateBatchXML()`, which injects it into the batch system prompt
 - Empty glossary = no prompt change, no behavioral difference
 
 ### Inline Edit Mode (译文内联编辑)
@@ -78,13 +78,12 @@ Stored in `chrome.storage.local` under key `config`:
 
 ### Translation Result Validation
 
-`translator.js` `cleanResult(text, originalText)` cleans API responses in this order:
+`TextProcessor.cleanTranslation(text)` preprocesses batch API responses:
 1. Strip markdown code blocks
-2. Extract `<t id="N">` content if XML-wrapped
-3. Strip `<translate>` wrappers
-4. Strip residual prompt text (`/^请翻译以下文本[：:]/i`)
-5. Detect model "refusal" meta-responses (e.g., "请提供您需要翻译的原文文本") → return `""`
-6. Empty result → treated as failure, triggers retry in `translateOne()`
+2. Extract `<translate>...</translate>` wrapper content
+3. `TextProcessor.mergeTranslations(chunks)` parses `<t id="N">...</t>` XML tags with regex `<t\s+id="(\d+)">([\s\S]*?)<\/t>`, maps each item back to `chunk.items[idx]`
+4. Items where `<t>` tag is not matched → marked as failed (no retry at individual item level)
+5. If the entire response has no valid XML, the batch retries (up to 3 times at batch level in `translateBatch()`)
 
 ### Popup — Content Script Recovery
 
@@ -108,7 +107,6 @@ All translation happens directly in the content script.
 ## Dead Code
 
 - `src/lib/storage.js` — unused; `BrowserCompat.getStorage()` in utils.js is used instead
-- `src/content/text-processor.js` — unused after per-node translation refactor; kept for reference
 
 ## Key Constraints
 
