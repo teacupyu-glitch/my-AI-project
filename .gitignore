@@ -28,3 +28,7 @@ Thumbs.db
 # 临时文件
 *.tmp
 .cache/
+
+# 打包文件
+*.zip
+*.tar.gz

@@ -82,10 +82,10 @@ AI_trans/
 │   ├── content/             # 内容脚本
 │   │   ├── index.js         # 主入口，消息路由
 │   │   ├── dom-extractor.js # DOM 文本提取
-│   │   ├── translator.js    # 翻译器（逐节点 API 调用 + 结果校验）
+│   │   ├── translator.js    # 翻译器（批次调用 API + 结果校验）
 │   │   ├── ui-injector.js   # UI 注入（控制条 + 编辑模式）
 │   │   ├── style.css        # 控制条样式（ds-trans-* 前缀）
-│   │   └── text-processor.js # 已废弃
+│   │   └── text-processor.js # 文本批处理器（分段 + XML 打包）
 │   ├── background/          # 后台 Service Worker
 │   └── lib/                 # 工具库
 │       ├── deepseek-client.js # DeepSeek API 客户端
@@ -109,10 +109,11 @@ npm run build      # 构建生产版本 → dist/
 ## 注意事项
 
 1. **API 密钥安全** — 密钥存储在浏览器本地 `chrome.storage.local` 中，不会上传到任何服务器
-2. **API 费用** — 使用 DeepSeek API 会产生费用，V4 Flash 约 1 元/百万输入 tokens
-3. **网络要求** — 需要能访问 `api.deepseek.com`
-4. **页面限制** — `chrome://`、`about:` 等特殊页面不支持翻译
-5. **模型迁移** — `deepseek-chat` 将于 2026 年 7 月停用，已全部迁移至 `deepseek-v4-flash`
+2. **请使用自己的 API Key** — 分享给朋友使用时，请让他们自行前往 [platform.deepseek.com](https://platform.deepseek.com) 注册获取自己的 API 密钥，不要共用
+3. **API 费用** — 使用 DeepSeek API 会产生费用，V4 Flash 约 1 元/百万输入 tokens
+4. **网络要求** — 需要能访问 `api.deepseek.com`
+5. **页面限制** — `chrome://`、`about:` 等特殊页面不支持翻译
+6. **模型迁移** — `deepseek-chat` 将于 2026 年 7 月停用，已全部迁移至 `deepseek-v4-flash`
 
 ## 许可证
 
