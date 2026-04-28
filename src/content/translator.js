@@ -1,8 +1,9 @@
 /**
  * 翻译器
- * 逐节点翻译，彻底消除批处理的分隔/合并问题
+ * 批处理模式：将多个文本节点打包为一个 XML 批次，一次 API 调用完成翻译
  */
 import DeepSeekClient from '../lib/deepseek-client.js';
+import TextProcessor from './text-processor.js';
 import { sleep } from '../lib/utils.js';
 
 class Translator {
@@ -20,6 +21,9 @@ class Translator {
     this.targetLang = config.targetLang || 'zh-CN';
     this.glossary = [];
 
+    // 批处理器
+    this.processor = new TextProcessor({ maxChunkSize: config.maxChunkSize || 2000 });
+
     this.onProgress = null;
     this.onError = null;
     this.onComplete = null;
@@ -30,9 +34,10 @@ class Translator {
   }
 
   updateConfig(config) {
-    if (config.concurrency) this.concurrency = config.concurrency;
+    if (config.concurrency !== undefined) this.concurrency = config.concurrency;
     if (config.sourceLang) this.sourceLang = config.sourceLang;
     if (config.targetLang) this.targetLang = config.targetLang;
+    this.processor.updateConfig(config);
   }
 
   setGlossary(glossary) {
@@ -40,7 +45,7 @@ class Translator {
   }
 
   /**
-   * 翻译 — 每个文本节点独立调用API
+   * 翻译 — 批处理模式
    */
   async translate(textNodes) {
     if (this.isTranslating) {
@@ -54,6 +59,8 @@ class Translator {
     this.cancelled = false;
     this.activeRequests = 0;
 
+    // 分割为批次
+    const chunks = this.processor.segmentTextNodes(textNodes);
     const total = textNodes.length;
     let completed = 0;
     let success = 0;
@@ -63,7 +70,7 @@ class Translator {
     try {
       const promises = [];
 
-      for (let i = 0; i < textNodes.length; i++) {
+      for (let i = 0; i < chunks.length; i++) {
         if (this.cancelled) break;
 
         while (this.activeRequests >= this.concurrency) {
@@ -73,23 +80,29 @@ class Translator {
 
         this.activeRequests++;
 
-        const nodeInfo = textNodes[i];
-        const promise = this.translateOne(nodeInfo)
+        const chunk = chunks[i];
+        const promise = this.translateBatch(chunk)
           .then(result => {
             this.activeRequests--;
-            completed++;
-            if (result.translated) success++;
-            if (result.error) { failed++; errors.push(result.error); }
+            const itemCount = chunk.totalItems;
+            completed += itemCount;
+            if (result.ok) {
+              success += itemCount;
+            } else {
+              failed += itemCount;
+              errors.push(result.error || '批次翻译失败');
+            }
             if (this.onProgress) this.onProgress(completed, total);
             return result;
           })
           .catch(err => {
             this.activeRequests--;
-            completed++;
-            failed++;
+            const itemCount = chunk.totalItems;
+            completed += itemCount;
+            failed += itemCount;
             errors.push(err.message);
             if (this.onProgress) this.onProgress(completed, total);
-            return { nodeInfo, error: err.message };
+            return { ok: false, error: err.message };
           });
 
         promises.push(promise);
@@ -104,7 +117,7 @@ class Translator {
       return {
         success: failed === 0,
         textNodes,
-        stats: { total, success, failed, errors }
+        stats: { total, success, failed, errors, batchCount: chunks.length }
       };
 
     } catch (error) {
@@ -117,38 +130,48 @@ class Translator {
   }
 
   /**
-   * 翻译单个文本节点
+   * 翻译单个批次
    */
-  async translateOne(nodeInfo) {
-    if (this.cancelled) return { nodeInfo };
+  async translateBatch(chunk) {
+    if (this.cancelled) return { ok: false };
 
     for (let attempt = 1; attempt <= this.maxRetries; attempt++) {
       try {
-        const result = await this.apiClient.translate(
-          nodeInfo.text,
+        const result = await this.apiClient.translateBatchXML(
+          chunk.text,
           this.sourceLang,
           this.targetLang,
-          { maxTokens: Math.max(nodeInfo.text.length * 2, 500), glossary: this.glossary }
+          {
+            maxTokens: Math.max(chunk.totalCharacters * 2, 2000),
+            glossary: this.glossary
+          }
         );
 
-        const cleaned = this.cleanResult(result.translatedText, nodeInfo.text);
+        // 预处理响应
+        const cleaned = this.processor.cleanTranslation(result.translatedText);
         if (!cleaned) {
           throw new Error('翻译结果无效，模型未返回有效译文');
         }
-        nodeInfo.translated = true;
-        nodeInfo.translatedText = cleaned;
 
-        return { nodeInfo, translated: true };
+        chunk.status = 'success';
+        chunk.translatedText = cleaned;
+
+        // 解析 XML 并映射回节点
+        this.processor.mergeTranslations([chunk]);
+
+        return { ok: true, chunk };
 
       } catch (error) {
         if (attempt === this.maxRetries) {
-          return { nodeInfo, translated: false, error: error.message };
+          chunk.status = 'failed';
+          chunk.error = error.message;
+          return { ok: false, chunk, error: error.message };
         }
         await sleep(this.retryDelay * attempt);
       }
     }
 
-    return { nodeInfo, translated: false, error: '重试耗尽' };
+    return { ok: false, chunk, error: '重试耗尽' };
   }
 
   cancel() {
@@ -158,49 +181,6 @@ class Translator {
       return true;
     }
     return false;
-  }
-
-  /**
-   * 清理API返回的译文（剥离XML标签/markdown包裹）
-   * @param {string} text - API返回原文
-   * @param {string} originalText - 待翻译的原文，用于校验
-   * @returns {string} 清洗后的译文，无效时返回空字符串
-   */
-  cleanResult(text, originalText = '') {
-    let t = text.trim();
-
-    // 移除 markdown 代码块包裹
-    t = t.replace(/^```(?:xml|html)?\s*\n?/i, '').replace(/\n?```\s*$/, '');
-
-    // 如果含有 <t id="...">，提取纯文本内容
-    if (/<t\s+id=/.test(t)) {
-      const parts = t.match(/<t\s+id="\d+">([\s\S]*?)<\/t>/g);
-      if (parts) {
-        t = parts.map(p => p.replace(/<t\s+id="\d+">/, '').replace(/<\/t>\s*$/, '').trim()).join('');
-      }
-    }
-
-    // 移除可能的 <translate> 包裹
-    t = t.replace(/^<translate>\s*\n?/, '').replace(/\n?\s*<\/translate>\s*$/, '');
-
-    t = t.trim();
-
-    // 剥离模型可能"反射"的提示词前缀
-    t = t.replace(/^请翻译以下文本[：:]\s*\n*/i, '').trim();
-
-    // 检测模型拒绝翻译的"元回复"（如"请提供原文"等）
-    if (/^请提供(您需要)?(的)?(需要)?翻译的?(原文)?文本[。.]?$/i.test(t) ||
-        /^请提供(您需要)?(的)?(需要)?翻译的?(原文)?内容[。.]?$/i.test(t) ||
-        /^请(输入|提供)(您需要)?(的)?(需要)?(翻译的?)?文本[。.]?$/i.test(t)) {
-      return '';
-    }
-
-    // 仅当结果为空时视为无效
-    if (!t) {
-      return '';
-    }
-
-    return t;
   }
 
   setProgressCallback(callback) { this.onProgress = callback; }

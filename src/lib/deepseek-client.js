@@ -126,27 +126,50 @@ class DeepSeekClient {
   }
 
   /**
-   * 批量翻译
+   * 批量翻译（XML 批次，一次请求翻译多条文本）
+   * @param {string} xmlText - `<translate><t id="0">...</t><t id="1">...</t></translate>` 格式
+   * @returns {object} { translatedText, model, usage }
    */
-  async translateBatch(texts, sourceLang, targetLang, options = {}) {
-    const concurrency = options.concurrency || 3;
-    const results = [];
+  async translateBatchXML(xmlText, sourceLang, targetLang, options = {}) {
+    const systemPrompt = options.systemPrompt || this.getBatchSystemPrompt(sourceLang, targetLang, options.glossary);
 
-    // 分批处理
-    for (let i = 0; i < texts.length; i += concurrency) {
-      const batch = texts.slice(i, i + concurrency);
-      const batchResults = await Promise.all(
-        batch.map(text => this.translate(text, sourceLang, targetLang, options))
-      );
-      results.push(...batchResults);
+    const response = await this.callAPI({
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: xmlText }
+      ],
+      temperature: options.temperature ?? 0.3,
+      max_tokens: options.maxTokens || Math.max(xmlText.length * 2, 2000)
+    });
 
-      // 调用进度回调
-      if (options.onProgress) {
-        options.onProgress(Math.min(i + concurrency, texts.length), texts.length);
-      }
+    return {
+      translatedText: response.choices[0].message.content,
+      model: this.model,
+      usage: response.usage
+    };
+  }
+
+  /**
+   * 批处理专用系统提示词
+   */
+  getBatchSystemPrompt(sourceLang, targetLang, glossary = []) {
+    let prompt = `你是一个专业的翻译助手。你会收到一段 XML 格式的文本，其中包含多个需要翻译的句子。
+
+翻译规则：
+1. 保持 XML 标签结构完全不变，包括 <t id="N"> 和 </t>，以及外层的 <translate> 和 </translate>
+2. 只翻译 <t id="N"> 标签内的文本内容
+3. 不要添加任何解释、说明或额外内容
+4. 不要用 markdown 代码块包裹输出
+5. 对于代码、URL、邮箱等特殊内容，保持原文不翻译`;
+
+    if (glossary && glossary.length > 0) {
+      const rules = glossary
+        .map(item => `  "${item.source}" → "${item.target}"`)
+        .join('\n');
+      prompt += `\n6. 以下是专有名词翻译对照表，翻译时必须严格遵守：\n${rules}`;
     }
 
-    return results;
+    return prompt;
   }
 
   /**
