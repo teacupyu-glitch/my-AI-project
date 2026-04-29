@@ -35,7 +35,7 @@ The content script (`src/content/index.js`) orchestrates these modules:
 
 1. **DOMExtractor** — `TreeWalker` to extract `Text` nodes from the DOM. Returns an array of `{ node, text, originalText, translated, translatedText, id, path, ... }` objects.
 
-2. **Translator** — Uses **batch processing**: `TextProcessor.segmentTextNodes()` groups nodes into XML batches (`<translate><t id="N">text</t></translate>`), each batch is one API call via `translateBatchXML()`. Concurrency is controlled at the batch level (default 3). After each batch, `mergeTranslations()` parses the XML response and sets `nodeInfo.translated = true` / `nodeInfo.translatedText`.
+2. **Translator** — Uses **batch processing**: `TextProcessor.segmentTextNodes()` groups nodes into XML batches (`<translate><t id="N">text</t></translate>`), each batch is one API call via `translateBatchXML()`. Concurrency is controlled by a **Promise Semaphore** (default 8), replacing the old `sleep(100)` polling loop. After each batch, `mergeTranslations()` parses the XML response and fires `onBatchComplete` to apply translations to the DOM incrementally.
 
 3. **UIInjector** — Injects a floating control bar with undo/toggle/edit/close buttons. Manages `originalNodes` Map (keyed by Text node reference) and `editSpans` Map for inline edit mode. Before translation, `saveOriginalNodes()` stores `{ originalText, translatedText: null }`. After translation, `applyTranslations()` sets `node.textContent` AND syncs `translatedText` back into the Map. Edit mode wraps TextNodes in contenteditable spans and unwraps on exit.
 
@@ -43,15 +43,18 @@ The content script (`src/content/index.js`) orchestrates these modules:
 
 ### Configuration
 
-Stored in `chrome.storage.local` under key `config`:
+Stored in `chrome.storage.local` under key `config`. **Note**: Changing code defaults does NOT update stored config for existing users — old values persist until the user resets or re-saves settings.
+
 ```javascript
 {
   apiConfig: { apiKey, model, endpoint },
-  translationSettings: { sourceLang, targetLang, maxChunkSize, concurrency, temperature },
-  excludedSites: [],
+  translationSettings: { sourceLang, targetLang, maxChunkSize: 4000, concurrency: 8, temperature: 0.1 },
+  excludedSites: ['github.com', 'stackoverflow.com', 'localhost'],
   glossary: [{ source: "原文", target: "译文" }]
 }
 ```
+
+**Critical constraint**: `temperature` is NOT explicitly passed from `translator.js` to the API client. The API client uses its own code default (`0.1`). Do NOT add temperature wiring without also ensuring stored config values won't override it with stale defaults.
 
 ### DeepSeek API
 
@@ -59,6 +62,10 @@ Stored in `chrome.storage.local` under key `config`:
 - Auth: `Bearer {apiKey}` header
 - Client: `src/lib/deepseek-client.js`
 - Default model: `deepseek-v4-flash` (also supports `deepseek-v4-pro`). Old `deepseek-chat`/`deepseek-coder` removed July 2026.
+- Default temperature: `0.1` (in `callAPI()` and `translateBatchXML()`)
+- `max_tokens` for batches: `Math.max(xmlText.length * 2, 2000)`
+- Retry: 3 attempts with exponential backoff (1s, 2s, 3s), only in `callAPI()` — there is NO outer retry in `translator.js`
+- **Streaming**: `translateBatchXMLStream()` is an async generator method (SSE via `response.body.getReader()`) — currently dead code. It proved counterproductive under HTTP proxy due to SSE buffering.
 - `getSystemPrompt(sourceLang, targetLang, glossary)` — when glossary is non-empty, appends a numbered rules section with term mapping: `"source" → "target"`
 
 ### Glossary (专有名词翻译)
@@ -81,9 +88,18 @@ Stored in `chrome.storage.local` under key `config`:
 `TextProcessor.cleanTranslation(text)` preprocesses batch API responses:
 1. Strip markdown code blocks
 2. Extract `<translate>...</translate>` wrapper content
-3. `TextProcessor.mergeTranslations(chunks)` parses `<t id="N">...</t>` XML tags with regex `<t\s+id="(\d+)">([\s\S]*?)<\/t>`, maps each item back to `chunk.items[idx]`
-4. Items where `<t>` tag is not matched → marked as failed (no retry at individual item level)
-5. If the entire response has no valid XML, the batch retries (up to 3 times at batch level in `translateBatch()`)
+3. `TextProcessor.mergeTranslations(chunks)` parses `<t id="N">...</t>` XML tags with regex `<t\b[^>]*\sid=["']?(\d+)["']?[^>]*>([\s\S]*?)<\/t>` (tolerant of quote variants and extra attributes), maps each item back to `chunk.items[idx]`
+4. Items where `<t>` tag is not matched → marked as failed
+5. If the entire response has no valid XML, the full text is assigned to the first item as a fallback
+6. `TextProcessor.mergeIncremental()` exists for streaming use but is currently dead code
+
+### Translator Concurrency (Semaphore)
+
+The `Semaphore` class (in `translator.js`) provides Promise-based concurrency control:
+- `acquire()` immediately resolves if a slot is free, otherwise returns a pending Promise
+- `release()` frees a slot and resolves the next waiter
+- `cancel()` rejects all pending waiters — used by `translator.cancel()` to abort queued batches
+- `translate()` uses `Promise.allSettled(chunks.map(...))` so a single batch failure doesn't reject the whole run
 
 ### Popup — Content Script Recovery
 
@@ -107,6 +123,14 @@ All translation happens directly in the content script.
 ## Dead Code
 
 - `src/lib/storage.js` — unused; `BrowserCompat.getStorage()` in utils.js is used instead
+- `translateBatchXMLStream()` in `src/lib/deepseek-client.js` — streaming API method, not called anywhere
+- `mergeIncremental()` in `src/content/text-processor.js` — incremental XML parser for streaming, not called
+
+## Packaging
+
+- **Desktop (Edge/Chrome)**: `ai-trans.zip` — distribute the `dist/` folder contents as a zip. User unzips then loads the folder via `chrome://extensions`.
+- **Mobile (Kiwi Browser)**: `ai-trans-kiwi.zip` — same contents, but must be created with **7-Zip** (`7z a -tzip`). PowerShell `Compress-Archive` produces a zip format Kiwi rejects.
+- Both packages are identical in content. Build with `npm run build`, then zip the `dist/` directory contents (not the directory itself).
 
 ## Key Constraints
 
