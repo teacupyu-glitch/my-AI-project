@@ -32,9 +32,9 @@ async function setDefaultConfig() {
       sourceLang: 'auto',
       targetLang: 'zh-CN',
       autoDetect: true,
-      maxChunkSize: 2000,
-      concurrency: 3,
-      temperature: 0.3
+      maxChunkSize: 4000,
+      concurrency: 8,
+      temperature: 0.1
     },
     uiSettings: {
       showProgress: true,

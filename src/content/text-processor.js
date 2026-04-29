@@ -6,7 +6,7 @@ import { estimateTokens } from '../lib/utils.js';
 
 class TextProcessor {
   constructor(options = {}) {
-    this.maxChunkSize = options.maxChunkSize || 2000; // 每批次最大字符数
+    this.maxChunkSize = options.maxChunkSize || 4000; // 每批次最大字符数
     this._idCounter = 0;
   }
 
@@ -85,7 +85,7 @@ class TextProcessor {
     for (const chunk of chunks) {
       if (chunk.status !== 'success') continue;
       const raw = chunk.translatedText || '';
-      const matches = raw.match(/<t\s+id="(\d+)">([\s\S]*?)<\/t>/g);
+      const matches = raw.match(/<t\b[^>]*\sid=["']?(\d+)["']?[^>]*>([\s\S]*?)<\/t>/g);
       if (!matches) {
         // 整个批次无有效 XML，尝试作为单段译文匹配第一个节点
         const clean = this.cleanTranslation(raw);
@@ -97,7 +97,7 @@ class TextProcessor {
       }
 
       for (const match of matches) {
-        const m = match.match(/<t\s+id="(\d+)">([\s\S]*?)<\/t>/);
+        const m = match.match(/<t\b[^>]*\sid=["']?(\d+)["']?[^>]*>([\s\S]*?)<\/t>/);
         if (!m) continue;
         const idx = parseInt(m[1]);
         const text = this.cleanTranslation(m[2]);
@@ -123,6 +123,35 @@ class TextProcessor {
     if (translateMatch) t = translateMatch[1].trim();
 
     return t;
+  }
+
+  /**
+   * 增量解析流式响应 — 从累积文本中提取已完成的 <t> 标签
+   * @param {string} accumulatedText - 当前累积的全部响应文本
+   * @param {object} chunk - 批次对象
+   * @param {Set} processedIds - 已处理过的 item 索引集合
+   * @returns {{ newItems: object[], processedCount: number }}
+   */
+  mergeIncremental(accumulatedText, chunk, processedIds = new Set()) {
+    const matches = accumulatedText.match(/<t\b[^>]*\sid=["']?(\d+)["']?[^>]*>([\s\S]*?)<\/t>/g);
+    if (!matches) return { newItems: [], processedCount: 0 };
+
+    const newItems = [];
+    for (const match of matches) {
+      const m = match.match(/<t\b[^>]*\sid=["']?(\d+)["']?[^>]*>([\s\S]*?)<\/t>/);
+      if (!m) continue;
+      const idx = parseInt(m[1]);
+      if (processedIds.has(idx)) continue;
+
+      const text = m[2].trim();
+      if (text && chunk.items[idx]) {
+        processedIds.add(idx);
+        chunk.items[idx].translated = true;
+        chunk.items[idx].translatedText = text;
+        newItems.push(chunk.items[idx]);
+      }
+    }
+    return { newItems, processedCount: processedIds.size };
   }
 
   updateConfig(options) {

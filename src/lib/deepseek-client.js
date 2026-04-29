@@ -33,7 +33,7 @@ class DeepSeekClient {
     const requestData = {
       model: params.model || this.model,
       messages: params.messages || [],
-      temperature: params.temperature ?? 0.3,
+      temperature: params.temperature ?? 0.1,
       max_tokens: params.max_tokens || 4000,
       stream: params.stream || false
     };
@@ -138,7 +138,7 @@ class DeepSeekClient {
         { role: 'system', content: systemPrompt },
         { role: 'user', content: xmlText }
       ],
-      temperature: options.temperature ?? 0.3,
+      temperature: options.temperature ?? 0.1,
       max_tokens: options.maxTokens || Math.max(xmlText.length * 2, 2000)
     });
 
@@ -147,6 +147,94 @@ class DeepSeekClient {
       model: this.model,
       usage: response.usage
     };
+  }
+
+  /**
+   * 批量翻译（流式，逐 token 返回累积文本）
+   * @returns {AsyncGenerator<string>} 每次 yield 完整的累积文本
+   */
+  async *translateBatchXMLStream(xmlText, sourceLang, targetLang, options = {}) {
+    if (!this.apiKey) throw new Error('API密钥未配置');
+
+    const systemPrompt = options.systemPrompt || this.getBatchSystemPrompt(sourceLang, targetLang, options.glossary);
+    const maxTokens = options.maxTokens || Math.max(xmlText.length * 2, 2000);
+    const temperature = options.temperature ?? 0.1;
+
+    const body = JSON.stringify({
+      model: this.model,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: xmlText }
+      ],
+      temperature,
+      max_tokens: maxTokens,
+      stream: true
+    });
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), this.timeout);
+
+    let response;
+    try {
+      response = await fetch(this.endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${this.apiKey}`
+        },
+        body,
+        signal: controller.signal
+      });
+    } catch (error) {
+      clearTimeout(timeoutId);
+      if (error.name === 'AbortError') throw new Error('API请求超时');
+      throw error;
+    }
+
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      const errorMsg = errorData.error?.message || `HTTP ${response.status}`;
+      if (response.status === 401) throw new Error('API密钥无效，请检查配置');
+      throw new Error(`API请求失败: ${errorMsg}`);
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let sseBuffer = '';
+    let accumulated = '';
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        sseBuffer += decoder.decode(value, { stream: true });
+        const lines = sseBuffer.split('\n');
+        sseBuffer = lines.pop() || '';
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed || !trimmed.startsWith('data:')) continue;
+          const data = trimmed.slice(5).trim();
+          if (data === '[DONE]') return;
+
+          try {
+            const parsed = JSON.parse(data);
+            const content = parsed.choices?.[0]?.delta?.content;
+            if (content) {
+              accumulated += content;
+              yield accumulated;
+            }
+          } catch {
+            // 跳过无法解析的行
+          }
+        }
+      }
+    } finally {
+      reader.releaseLock();
+    }
   }
 
   /**

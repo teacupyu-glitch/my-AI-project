@@ -4,17 +4,49 @@
  */
 import DeepSeekClient from '../lib/deepseek-client.js';
 import TextProcessor from './text-processor.js';
-import { sleep } from '../lib/utils.js';
+
+/** Promise 信号量 — 控制并发数，支持取消 */
+class Semaphore {
+  constructor(max) {
+    this.max = max;
+    this.current = 0;
+    this.waiting = [];
+    this.rejected = false;
+  }
+
+  acquire() {
+    if (this.rejected) return Promise.reject(new Error('CANCELLED'));
+    if (this.current < this.max) {
+      this.current++;
+      return Promise.resolve();
+    }
+    return new Promise((resolve, reject) => {
+      this.waiting.push({ resolve, reject });
+    });
+  }
+
+  release() {
+    this.current--;
+    if (!this.rejected && this.waiting.length > 0) {
+      this.current++;
+      this.waiting.shift().resolve();
+    }
+  }
+
+  cancel() {
+    this.rejected = true;
+    for (const w of this.waiting) {
+      w.reject(new Error('CANCELLED'));
+    }
+    this.waiting = [];
+  }
+}
 
 class Translator {
   constructor(config = {}) {
     this.apiClient = null;
-    this.concurrency = config.concurrency || 3;
-    this.maxRetries = config.maxRetries || 3;
-    this.retryDelay = config.retryDelay || 1000;
-
+    this.concurrency = config.concurrency || 8;
     this.isTranslating = false;
-    this.activeRequests = 0;
     this.cancelled = false;
 
     this.sourceLang = config.sourceLang || 'auto';
@@ -22,11 +54,14 @@ class Translator {
     this.glossary = [];
 
     // 批处理器
-    this.processor = new TextProcessor({ maxChunkSize: config.maxChunkSize || 2000 });
+    this.processor = new TextProcessor({ maxChunkSize: config.maxChunkSize || 4000 });
 
     this.onProgress = null;
     this.onError = null;
     this.onComplete = null;
+    this.onBatchComplete = null;
+
+    this._sem = null;
   }
 
   initAPI(apiKey, model = 'deepseek-v4-flash') {
@@ -45,7 +80,7 @@ class Translator {
   }
 
   /**
-   * 翻译 — 批处理模式
+   * 翻译 — 批处理模式，Promise 信号量控制并发
    */
   async translate(textNodes) {
     if (this.isTranslating) {
@@ -57,9 +92,7 @@ class Translator {
 
     this.isTranslating = true;
     this.cancelled = false;
-    this.activeRequests = 0;
 
-    // 分割为批次
     const chunks = this.processor.segmentTextNodes(textNodes);
     const total = textNodes.length;
     let completed = 0;
@@ -67,23 +100,23 @@ class Translator {
     let failed = 0;
     const errors = [];
 
+    this._sem = new Semaphore(this.concurrency);
+
     try {
-      const promises = [];
+      const results = await Promise.allSettled(
+        chunks.map(async (chunk) => {
+          try {
+            await this._sem.acquire();
+          } catch {
+            return { ok: false, error: 'CANCELLED' };
+          }
+          if (this.cancelled) {
+            this._sem.release();
+            return { ok: false, error: 'CANCELLED' };
+          }
 
-      for (let i = 0; i < chunks.length; i++) {
-        if (this.cancelled) break;
-
-        while (this.activeRequests >= this.concurrency) {
-          await sleep(100);
-        }
-        if (this.cancelled) break;
-
-        this.activeRequests++;
-
-        const chunk = chunks[i];
-        const promise = this.translateBatch(chunk)
-          .then(result => {
-            this.activeRequests--;
+          try {
+            const result = await this.translateBatch(chunk);
             const itemCount = chunk.totalItems;
             completed += itemCount;
             if (result.ok) {
@@ -94,21 +127,18 @@ class Translator {
             }
             if (this.onProgress) this.onProgress(completed, total);
             return result;
-          })
-          .catch(err => {
-            this.activeRequests--;
-            const itemCount = chunk.totalItems;
-            completed += itemCount;
-            failed += itemCount;
-            errors.push(err.message);
-            if (this.onProgress) this.onProgress(completed, total);
-            return { ok: false, error: err.message };
-          });
+          } finally {
+            this._sem.release();
+          }
+        })
+      );
 
-        promises.push(promise);
+      // 收集未处理的错误
+      for (const r of results) {
+        if (r.status === 'rejected') {
+          errors.push(r.reason?.message || '未知错误');
+        }
       }
-
-      await Promise.all(promises);
 
       if (this.onComplete) {
         this.onComplete({ total, success, failed });
@@ -125,59 +155,55 @@ class Translator {
       return { success: false, error: error.message };
     } finally {
       this.isTranslating = false;
-      this.activeRequests = 0;
+      this._sem = null;
     }
   }
 
   /**
-   * 翻译单个批次
+   * 翻译单个批次（网络重试由 deepseek-client 内部处理）
    */
   async translateBatch(chunk) {
     if (this.cancelled) return { ok: false };
 
-    for (let attempt = 1; attempt <= this.maxRetries; attempt++) {
-      try {
-        const result = await this.apiClient.translateBatchXML(
-          chunk.text,
-          this.sourceLang,
-          this.targetLang,
-          {
-            maxTokens: Math.max(chunk.totalCharacters * 2, 2000),
-            glossary: this.glossary
-          }
-        );
-
-        // 预处理响应
-        const cleaned = this.processor.cleanTranslation(result.translatedText);
-        if (!cleaned) {
-          throw new Error('翻译结果无效，模型未返回有效译文');
+    try {
+      const result = await this.apiClient.translateBatchXML(
+        chunk.text,
+        this.sourceLang,
+        this.targetLang,
+        {
+          maxTokens: Math.max(chunk.totalCharacters * 2, 2000),
+          glossary: this.glossary
         }
+      );
 
-        chunk.status = 'success';
-        chunk.translatedText = cleaned;
-
-        // 解析 XML 并映射回节点
-        this.processor.mergeTranslations([chunk]);
-
-        return { ok: true, chunk };
-
-      } catch (error) {
-        if (attempt === this.maxRetries) {
-          chunk.status = 'failed';
-          chunk.error = error.message;
-          return { ok: false, chunk, error: error.message };
-        }
-        await sleep(this.retryDelay * attempt);
+      const cleaned = this.processor.cleanTranslation(result.translatedText);
+      if (!cleaned) {
+        throw new Error('翻译结果无效，模型未返回有效译文');
       }
-    }
 
-    return { ok: false, chunk, error: '重试耗尽' };
+      chunk.status = 'success';
+      chunk.translatedText = cleaned;
+
+      this.processor.mergeTranslations([chunk]);
+
+      if (this.onBatchComplete) {
+        this.onBatchComplete(chunk.items);
+      }
+
+      return { ok: true, chunk };
+
+    } catch (error) {
+      chunk.status = 'failed';
+      chunk.error = error.message;
+      return { ok: false, chunk, error: error.message };
+    }
   }
 
   cancel() {
     if (this.isTranslating) {
       this.cancelled = true;
       this.isTranslating = false;
+      if (this._sem) this._sem.cancel();
       return true;
     }
     return false;
@@ -186,11 +212,12 @@ class Translator {
   setProgressCallback(callback) { this.onProgress = callback; }
   setErrorCallback(callback) { this.onError = callback; }
   setCompleteCallback(callback) { this.onComplete = callback; }
+  setBatchCompleteCallback(callback) { this.onBatchComplete = callback; }
 
   getStatus() {
     return {
       isTranslating: this.isTranslating,
-      activeRequests: this.activeRequests
+      activeRequests: this._sem ? this._sem.current : 0
     };
   }
 

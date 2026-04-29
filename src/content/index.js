@@ -45,6 +45,10 @@ class ContentScript {
       this.uiInjector.updateProgress(current, total);
     });
 
+    this.translator.setBatchCompleteCallback((items) => {
+      this.uiInjector.applyTranslations(items);
+    });
+
     this.translator.setErrorCallback((error) => {
       console.error('翻译错误:', error);
       this.uiInjector.updateStatus('error');
